@@ -1,5 +1,5 @@
 {
-  "name": "@dhruvagnihotri/react-headless-auth",
+  "name": "@headlesskits/react-headless-auth",
   "version": "1.0.0",
   "description": "Production-ready, headless authentication for React. Cookie-first with localStorage fallback. Pairs with flask-headless-auth backend.",
   "main": "./dist/index.js",
