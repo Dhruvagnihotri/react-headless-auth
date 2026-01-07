@@ -1,0 +1,73 @@
+{
+  "name": "@dhruvagnihotri/react-headless-auth",
+  "version": "1.0.0",
+  "description": "Production-ready, headless authentication for React. Cookie-first with localStorage fallback. Pairs with flask-headless-auth backend.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.mjs",
+      "require": "./dist/core/index.js"
+    },
+    "./native": {
+      "types": "./dist/adapters/native.d.ts",
+      "import": "./dist/adapters/native.mjs",
+      "require": "./dist/adapters/native.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
+    "react-dom": "^17.0.0 || ^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {},
+  "keywords": [
+    "react",
+    "authentication",
+    "auth",
+    "headless",
+    "jwt",
+    "oauth",
+    "flask",
+    "login",
+    "signup",
+    "session",
+    "token"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dhruvagnihotri/react-headless-auth"
+  },
+  "author": "Dhruv Agnihotri",
+  "license": "MIT"
+}
