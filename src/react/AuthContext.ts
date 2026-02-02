@@ -23,6 +23,24 @@ export interface AuthContextValue {
   googleLogin: (redirectPath?: string) => void;
   microsoftLogin: (redirectPath?: string) => void;
   checkAuth: () => Promise<void>;
+  
+  /**
+   * Get access token for making authenticated API calls
+   * Returns token string for localStorage mode, or null for cookie mode
+   * 
+   * Usage:
+   * ```typescript
+   * const { getAccessToken } = useAuth();
+   * const token = await getAccessToken();
+   * 
+   * // Make API call
+   * const response = await fetch('/api/data', {
+   *   headers: token ? { Authorization: `Bearer ${token}` } : {},
+   *   credentials: 'include' // Always include for cookie mode
+   * });
+   * ```
+   */
+  getAccessToken: (options?: { forceRefresh?: boolean }) => Promise<string | null>;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

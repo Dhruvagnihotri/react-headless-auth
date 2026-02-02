@@ -146,7 +146,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     pendingTokens.current = tokens;
     setIsAuthenticated(true);
     await fetchUserData();
-  }, [fetchUserData]);
+    
+    // Initialize JWT-aware refresh scheduling
+    client.initializeRefreshSchedule(tokens.access_token);
+  }, [fetchUserData, client]);
 
   /**
    * Check authentication status
@@ -284,6 +287,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
           access_token: response.access_token,
           refresh_token: response.refresh_token,
         });
+      } else {
+        // Cookie mode - initialize refresh if we can get token from getUser response
+        setIsAuthenticated(true);
+        await fetchUserData();
       }
 
       await hookManager.trigger('afterLogin', { user: response.user!, tokens: response });
@@ -313,6 +320,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
           access_token: response.access_token,
           refresh_token: response.refresh_token,
         });
+      } else {
+        // Cookie mode - initialize refresh if we can get token from getUser response
+        setIsAuthenticated(true);
+        await fetchUserData();
       }
 
       await hookManager.trigger('afterSignup', { user: response.user!, tokens: response });
@@ -338,6 +349,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
       setUser(null);
       await storage.clearTokens();
       pendingTokens.current = null;
+      
+      // Clean up JWT-aware refresh scheduling
+      await client.cleanup();
 
       await hookManager.trigger('afterLogout', {});
 
@@ -348,6 +362,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
       // Clear local state even if server logout fails
       await storage.clearTokens();
       pendingTokens.current = null;
+      await client.cleanup();
       
       return { success: false, error: error.message };
     }
@@ -428,6 +443,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     window.location.href = url;
   }, [client]);
 
+  /**
+   * Get access token for making authenticated API calls
+   */
+  const getAccessToken = useCallback(async (options?: { forceRefresh?: boolean }) => {
+    return client.getAccessToken(options);
+  }, [client]);
+
+  /**
+   * Cleanup on unmount
+   */
+  useEffect(() => {
+    return () => {
+      if (config.debug) {
+        console.log('[AuthProvider] Cleaning up refresh schedule');
+      }
+      client.clearRefreshSchedule();
+    };
+  }, [client, config.debug]);
+
   const contextValue = {
     isAuthenticated,
     loading,
@@ -443,6 +477,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     googleLogin,
     microsoftLogin,
     checkAuth,
+    getAccessToken,
   };
 
   return (
