@@ -1,7 +1,7 @@
 {
   "name": "@headlesskits/react-headless-auth",
-  "version": "1.0.0",
-  "description": "Production-ready, headless authentication for React. Cookie-first with localStorage fallback. Pairs with flask-headless-auth backend.",
+  "version": "1.0.1",
+  "description": "React authentication with smart cookie fallback (httpOnly → localStorage). Get 20+ production-ready auth routes with flask-headless-auth backend. Zero config, zero dependencies, maximum security. OAuth, MFA, email verification included.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -55,19 +55,66 @@
     "react",
     "authentication",
     "auth",
-    "headless",
+    "react-auth",
+    "react-authentication",
+    "headless-auth",
     "jwt",
+    "jwt-auth",
     "oauth",
+    "oauth2",
+    "google-login",
+    "microsoft-login",
     "flask",
+    "flask-auth",
     "login",
     "signup",
+    "register",
     "session",
-    "token"
+    "session-management",
+    "token",
+    "access-token",
+    "refresh-token",
+    "secure-auth",
+    "httponly-cookies",
+    "nextjs",
+    "nextjs-auth",
+    "next-auth-alternative",
+    "clerk-alternative",
+    "supabase-auth-alternative",
+    "typescript",
+    "typescript-auth",
+    "spa",
+    "spa-authentication",
+    "api-auth",
+    "rest-api",
+    "frontend-auth",
+    "react-hooks",
+    "context-api",
+    "password-reset",
+    "email-verification",
+    "mfa",
+    "two-factor",
+    "rbac",
+    "role-based-access",
+    "security",
+    "xss-protection",
+    "csrf-protection"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/Dhruvagnihotri/react-headless-auth"
   },
-  "author": "Dhruv Agnihotri",
-  "license": "MIT"
+  "bugs": {
+    "url": "https://github.com/Dhruvagnihotri/react-headless-auth/issues"
+  },
+  "homepage": "https://github.com/Dhruvagnihotri/react-headless-auth#readme",
+  "author": {
+    "name": "Dhruv Agnihotri",
+    "email": "dagni@umich.edu",
+    "url": "https://github.com/Dhruvagnihotri"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
 }
