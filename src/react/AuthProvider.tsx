@@ -145,13 +145,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
    * Complete authentication (after login/signup/oauth)
    */
   const completeAuthentication = useCallback(async (tokens: { access_token: string; refresh_token: string }) => {
-    pendingTokens.current = tokens;
+    // If using localStorage-only strategy, store tokens immediately
+    // Otherwise, use pendingTokens pattern for cookie detection
+    if (config.storageStrategy === 'localStorage-only') {
+      await storage.setTokens(tokens.access_token, tokens.refresh_token);
+    } else {
+      pendingTokens.current = tokens;
+    }
+    
     setIsAuthenticated(true);
     await fetchUserData();
     
     // Initialize JWT-aware refresh scheduling
     client.initializeRefreshSchedule(tokens.access_token);
-  }, [fetchUserData, client]);
+  }, [fetchUserData, client, storage, config.storageStrategy]);
 
   /**
    * Check authentication status
@@ -217,9 +224,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
 
   /**
    * Extract OAuth tokens from URL
+   * Only works in browser environments (not React Native)
    */
   const extractOAuthTokensFromUrl = useCallback(async (): Promise<{ access_token: string; refresh_token: string } | null> => {
-    if (typeof window === 'undefined') return null;
+    // Check for browser environment with window.location
+    // React Native has window but not window.location
+    if (typeof window === 'undefined' || typeof window.location === 'undefined') {
+      return null;
+    }
 
     try {
       const href = window.location.href;
@@ -246,10 +258,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
 
       return null;
     } catch (error) {
-      console.error('[AuthProvider] Error extracting OAuth tokens:', error);
+      if (config.debug) {
+        console.error('[AuthProvider] Error extracting OAuth tokens:', error);
+      }
       return null;
     }
-  }, [storage]);
+  }, [storage, config.debug]);
 
   /**
    * Initialize auth on mount
@@ -422,9 +436,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [client, hookManager]);
 
   /**
-   * Google OAuth login
+   * Google OAuth login (browser only)
    */
   const googleLogin = useCallback((redirectPath?: string) => {
+    if (typeof window === 'undefined' || typeof window.location === 'undefined') {
+      console.error('[AuthProvider] OAuth login is only available in browser environments');
+      return;
+    }
+
     const redirectUri = redirectPath 
       ? `${window.location.origin}?redirect=${encodeURIComponent(redirectPath)}`
       : window.location.origin;
@@ -434,9 +453,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [client]);
 
   /**
-   * Microsoft OAuth login
+   * Microsoft OAuth login (browser only)
    */
   const microsoftLogin = useCallback((redirectPath?: string) => {
+    if (typeof window === 'undefined' || typeof window.location === 'undefined') {
+      console.error('[AuthProvider] OAuth login is only available in browser environments');
+      return;
+    }
+
     const redirectUri = redirectPath
       ? `${window.location.origin}?redirect=${encodeURIComponent(redirectPath)}`
       : window.location.origin;
