@@ -17,6 +17,7 @@ export interface AuthProviderProps {
   config?: Partial<AuthConfig>;
   hooks?: HookHandlers;
   onReady?: () => void;
+  storageAdapter?: any; // Custom storage adapter (e.g., AsyncStorageAdapter for React Native)
 }
 
 /**
@@ -27,6 +28,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   config: userConfig,
   hooks: userHooks = {},
   onReady,
+  storageAdapter,
 }) => {
   // Validate and normalize config
   const config = useMemo(() => {
@@ -37,7 +39,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [userConfig]);
 
   // Initialize core services
-  const storage = useMemo(() => new TokenStorage(config.storageStrategy), [config.storageStrategy]);
+  const storage = useMemo(() => new TokenStorage(config.storageStrategy, storageAdapter), [config.storageStrategy, storageAdapter]);
   const client = useMemo(() => new AuthClient(config, storage), [config, storage]);
   
   // Initialize hook manager

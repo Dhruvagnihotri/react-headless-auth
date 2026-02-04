@@ -14,6 +14,8 @@ export type { AuthContextValue } from './react/AuthContext';
 // Core exports (for advanced users)
 export { AuthClient } from './core/AuthClient';
 export { TokenStorage, LocalStorageAdapter } from './core/TokenStorage';
+export { AsyncStorageAdapter } from './core/AsyncStorageAdapter';
+export type { AsyncStorageInterface } from './core/AsyncStorageAdapter';
 
 // Types
 export type {
@@ -36,3 +38,7 @@ export type { AuthHook, HookHandler, HookHandlers, HookContext } from './extensi
 // Configuration
 export { validateConfig, ConfigValidationError } from './config/validator';
 export { DEFAULT_AUTH_CONFIG, DEFAULT_ENDPOINTS } from './config/defaults';
+
+// Helpers
+export { createAuthFetch, useAuthFetch } from './helpers/fetchWithAuth';
+export type { FetchWithAuthOptions } from './helpers/fetchWithAuth';

@@ -1,4 +1,5 @@
 /**
+ * Authenticated fetch helper for React
  * Optional helper for making authenticated requests with automatic 401 retry
  * 
  * NOTE: All internal AuthClient methods (getUser, updateUser, etc.) now have

@@ -70,10 +70,10 @@ export class TokenStorage {
 
   constructor(
     strategy: StorageStrategy = 'cookie-first',
-    adapter: StorageAdapter = new LocalStorageAdapter()
+    adapter?: StorageAdapter
   ) {
     this.strategy = strategy;
-    this.adapter = adapter;
+    this.adapter = adapter || new LocalStorageAdapter();
   }
 
   /**
