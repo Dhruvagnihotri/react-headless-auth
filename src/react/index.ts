@@ -10,15 +10,27 @@ export { AuthProvider } from './AuthProvider';
 export { AuthContext } from './AuthContext';
 
 // Hooks
-export { useAuth, useUser, useSession } from './hooks';
+export { useAuth, useUser, useSession, useRole, useSessions, useAuditLogs } from './hooks';
+export type { UseRoleReturn, UseSessionsReturn, Session, UseAuditLogsReturn, AuditLog, ActivityLog } from './hooks';
+
+// RBAC Components
+export { PermissionGate, RoleGate, SessionManager, AuditLogViewer } from './components';
+export type { PermissionGateProps } from './components';
 
 // Types
 export type { AuthContextValue } from './AuthContext';
 
 // Core exports (for advanced usage)
 export { AuthClient, TokenStorage, LocalStorageAdapter } from '../core';
+export { RBACClient } from '../core/RBACClient';
 export type { 
-  User, 
+  User,
+  Role,
+  Permission,
+  CreateRoleInput,
+  UpdateRoleInput,
+  CreatePermissionInput,
+  RBACConfig,
   AuthTokens, 
   AuthConfig,
   StorageAdapter,
@@ -28,4 +40,4 @@ export type {
 
 // Extensibility (for custom hooks)
 export { HookManager } from '../extensibility';
-export type { HookType, HookCallback, HookContext } from '../extensibility';
+export type { AuthHook, HookHandler, HookContext } from '../extensibility';

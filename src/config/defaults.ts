@@ -11,6 +11,11 @@ export const DEFAULT_AUTH_CONFIG: Partial<AuthConfig> = {
   enableGoogle: false,
   enableMicrosoft: false,
   enablePostHog: false,
+  rbac: {
+    rbacPrefix: '/api/rbac',
+    autoFetchPermissions: true,
+    permissionCacheTTL: 5 * 60 * 1000, // 5 minutes
+  },
   debug: false,
   logLevel: 'warn',
   customHeaders: {},
@@ -19,12 +24,17 @@ export const DEFAULT_AUTH_CONFIG: Partial<AuthConfig> = {
 export const DEFAULT_ENDPOINTS: AuthEndpoints = {
   login: '/login',
   logout: '/logout',
-  signup: '/signup',
+  signup: '/register',
   checkAuth: '/check-auth',
   userMe: '/user/@me',
   tokenRefresh: '/token/refresh',
-  updateUser: '/user/@me',
-  updatePassword: '/password/update',
+  updateUser: '/update_user',
+  updatePassword: '/update_user',
   googleLogin: '/login/google',
   microsoftLogin: '/login/microsoft',
+  requestPasswordReset: '/request-password-reset',
+  resetPassword: '/reset-password',
+  resendVerification: '/resend-verification-email',
+  uploadProfilePicture: '/upload-profile-picture',
+  verifyMfa: '/verify-mfa',
 };

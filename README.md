@@ -600,15 +600,22 @@ User receives email with reset link.
 <details>
 <summary><strong>What about email verification?</strong></summary>
 
-Included in flask-headless-auth:
+flask-headless-auth generates tokens and URLs — you send the emails via hooks using any provider:
 
 ```python
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_USERNAME'] = 'your-email@gmail.com'
-app.config['MAIL_PASSWORD'] = 'your-app-password'
+app.config['FRONTEND_URL'] = 'https://yourapp.com'
+
+@auth.hook('send_verification_email')
+def send_verification(user, token, verification_url):
+    # Use SendGrid, SES, Resend, Postmark, or any email service
+    send_email(to=user['email'], subject='Verify your email', body=verification_url)
+
+@auth.hook('send_password_reset_email')
+def send_reset(user, token, reset_url):
+    send_email(to=user['email'], subject='Reset password', body=reset_url)
 ```
 
-Users automatically receive verification emails on signup.
+Users automatically receive verification emails on signup when hooks are registered.
 </details>
 
 <details>

@@ -477,6 +477,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [client]);
 
   /**
+   * Request password reset email
+   */
+  const requestPasswordReset = useCallback(async (email: string) => {
+    return client.requestPasswordReset(email);
+  }, [client]);
+
+  /**
+   * Complete password reset with token and new password
+   */
+  const resetPassword = useCallback(async (token: string, newPassword: string) => {
+    return client.resetPassword(token, newPassword);
+  }, [client]);
+
+  /**
+   * Resend email verification
+   */
+  const resendVerificationEmail = useCallback(async () => {
+    return client.resendVerificationEmail();
+  }, [client]);
+
+  /**
+   * Upload profile picture
+   */
+  const uploadProfilePicture = useCallback(async (file: File | Blob) => {
+    const result = await client.uploadProfilePicture(file);
+    // Refresh user data to pick up new profile picture URL
+    await refreshUser();
+    return result;
+  }, [client, refreshUser]);
+
+  /**
+   * Verify MFA token
+   */
+  const verifyMfa = useCallback(async (email: string, mfaToken: string) => {
+    const response = await client.verifyMfa(email, mfaToken);
+    if (response.access_token && response.refresh_token) {
+      await completeAuthentication({
+        access_token: response.access_token,
+        refresh_token: response.refresh_token,
+      });
+    }
+    return response;
+  }, [client, completeAuthentication]);
+
+  /**
    * Cleanup on unmount
    */
   useEffect(() => {
@@ -488,11 +533,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     };
   }, [client, config.debug]);
 
+  // Expose resolved config so child hooks (useSessions, useAuditLogs, useAdmin) can derive URLs
+  const resolvedConfig = client.getConfig();
+
   const contextValue = {
     isAuthenticated,
     loading,
     isRefreshingToken,
     user,
+    config: resolvedConfig,
     login,
     signup,
     logout,
@@ -500,6 +549,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     refreshAccessToken,
     updateUser,
     updatePassword,
+    requestPasswordReset,
+    resetPassword,
+    resendVerificationEmail,
+    uploadProfilePicture,
+    verifyMfa,
     googleLogin,
     microsoftLogin,
     checkAuth,

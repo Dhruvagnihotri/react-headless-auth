@@ -3,7 +3,7 @@
  */
 
 import { createContext } from 'react';
-import type { User } from '../core/types';
+import type { User, AuthConfig } from '../core/types';
 
 export interface AuthContextValue {
   // State
@@ -11,6 +11,9 @@ export interface AuthContextValue {
   loading: boolean;
   isRefreshingToken: boolean;
   user: User | null;
+
+  /** Resolved config (for child hooks to derive URLs) */
+  config: Required<AuthConfig>;
   
   // Actions
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -20,6 +23,11 @@ export interface AuthContextValue {
   refreshAccessToken: () => Promise<boolean>;
   updateUser: (userData: Partial<User>) => Promise<{ success: boolean; error?: string; user?: Partial<User> }>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<{ message: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<{ message: string }>;
+  resendVerificationEmail: () => Promise<{ message: string }>;
+  uploadProfilePicture: (file: File | Blob) => Promise<{ message: string; url?: string }>;
+  verifyMfa: (email: string, mfaToken: string) => Promise<any>;
   googleLogin: (redirectPath?: string) => void;
   microsoftLogin: (redirectPath?: string) => void;
   checkAuth: () => Promise<void>;

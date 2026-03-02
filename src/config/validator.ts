@@ -35,12 +35,16 @@ export function validateConfig(config: Partial<AuthConfig>): Required<AuthConfig
     console.warn('[AuthConfig] PostHog enabled but posthogApiKey not provided');
   }
 
+  // Derive sibling prefixes from apiPrefix (e.g. /api/mrscribe/auth → /api/mrscribe/rbac)
+  const apiPrefix = config.apiPrefix ?? DEFAULT_AUTH_CONFIG.apiPrefix!;
+  const basePrefix = apiPrefix.replace(/\/auth$/, '');
+
   // Merge with defaults
   return {
     ...DEFAULT_AUTH_CONFIG,
     ...config,
     apiBaseUrl: config.apiBaseUrl,
-    apiPrefix: config.apiPrefix ?? DEFAULT_AUTH_CONFIG.apiPrefix!,
+    apiPrefix,
     storageStrategy: config.storageStrategy ?? DEFAULT_AUTH_CONFIG.storageStrategy!,
     tokenRefreshInterval: config.tokenRefreshInterval ?? DEFAULT_AUTH_CONFIG.tokenRefreshInterval!,
     enableGoogle: config.enableGoogle ?? DEFAULT_AUTH_CONFIG.enableGoogle!,
@@ -49,6 +53,9 @@ export function validateConfig(config: Partial<AuthConfig>): Required<AuthConfig
     microsoftClientId: config.microsoftClientId ?? '',
     enablePostHog: config.enablePostHog ?? DEFAULT_AUTH_CONFIG.enablePostHog!,
     posthogApiKey: config.posthogApiKey ?? '',
+    rbac: config.rbac ?? { rbacPrefix: `${basePrefix}/rbac`, autoFetchPermissions: true, permissionCacheTTL: 300000 },
+    admin: config.admin ?? { adminPrefix: `${basePrefix}/admin` },
+    audit: config.audit ?? { auditPrefix: `${basePrefix}/audit` },
     customHeaders: config.customHeaders ?? DEFAULT_AUTH_CONFIG.customHeaders!,
     endpoints: config.endpoints ?? {},
     debug: config.debug ?? DEFAULT_AUTH_CONFIG.debug!,

@@ -207,10 +207,8 @@ app.config['AUTHSVC_ENABLE_RBAC'] = True
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 
-# Email verification
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_USERNAME'] = 'your-email@gmail.com'
-app.config['MAIL_PASSWORD'] = 'your-app-password'
+# Email (deliver via hooks — register send_verification_email, send_password_reset_email hooks)
+app.config['FRONTEND_URL'] = 'http://localhost:3000'
 
 # OAuth
 app.config['GOOGLE_CLIENT_ID'] = 'your-google-client-id'

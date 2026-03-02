@@ -21,14 +21,19 @@ import { TokenStorage } from './TokenStorage';
 const DEFAULT_ENDPOINTS: AuthEndpoints = {
   login: '/login',
   logout: '/logout',
-  signup: '/signup',
+  signup: '/register',
   checkAuth: '/check-auth',
   userMe: '/user/@me',
   tokenRefresh: '/token/refresh',
-  updateUser: '/user/@me',
-  updatePassword: '/password/update',
+  updateUser: '/update_user',
+  updatePassword: '/update_user',
   googleLogin: '/login/google',
   microsoftLogin: '/login/microsoft',
+  requestPasswordReset: '/request-password-reset',
+  resetPassword: '/reset-password',
+  resendVerification: '/resend-verification-email',
+  uploadProfilePicture: '/upload-profile-picture',
+  verifyMfa: '/verify-mfa',
 };
 
 /**
@@ -43,9 +48,13 @@ export class AuthClient {
 
   constructor(config: AuthConfig, storage: TokenStorage) {
     // Apply defaults
+    const apiPrefix = config.apiPrefix ?? '/api/auth';
+    // Derive sibling prefixes from apiPrefix (e.g. /api/mrscribe/auth → /api/mrscribe/rbac)
+    const basePrefix = apiPrefix.replace(/\/auth$/, '');
+
     this.config = {
       apiBaseUrl: config.apiBaseUrl,
-      apiPrefix: config.apiPrefix ?? '/api/auth',
+      apiPrefix,
       storageStrategy: config.storageStrategy ?? 'cookie-first',
       tokenRefreshInterval: config.tokenRefreshInterval ?? 55 * 60 * 1000,
       enableGoogle: config.enableGoogle ?? false,
@@ -54,6 +63,9 @@ export class AuthClient {
       microsoftClientId: config.microsoftClientId ?? '',
       enablePostHog: config.enablePostHog ?? false,
       posthogApiKey: config.posthogApiKey ?? '',
+      rbac: config.rbac ?? { rbacPrefix: `${basePrefix}/rbac`, autoFetchPermissions: true, permissionCacheTTL: 300000 },
+      admin: config.admin ?? { adminPrefix: `${basePrefix}/admin` },
+      audit: config.audit ?? { auditPrefix: `${basePrefix}/audit` },
       customHeaders: config.customHeaders ?? {},
       endpoints: config.endpoints ?? {},
       debug: config.debug ?? false,
@@ -298,13 +310,13 @@ export class AuthClient {
   }
 
   /**
-   * Update user data
+   * Update user data (profile fields, or password via { password } key)
    */
   async updateUser(data: UpdateUserData): Promise<User> {
-    const response = await this.request<{ user: User }>(
+    const response = await this.request<{ user: User; message?: string }>(
       this.endpoints.updateUser,
       {
-        method: 'PUT',
+        method: 'POST',
         body: JSON.stringify(data),
       },
       true
@@ -313,16 +325,98 @@ export class AuthClient {
   }
 
   /**
-   * Update password
+   * Update password via the update_user endpoint.
+   * Backend accepts { password: "newPass" } on POST /update_user.
+   * currentPassword is included for backends that require verification.
    */
   async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
     await this.request(
       this.endpoints.updatePassword,
       {
         method: 'POST',
-        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+        body: JSON.stringify({ password: newPassword, current_password: currentPassword }),
       },
       true
+    );
+  }
+
+  /**
+   * Request a password reset email
+   */
+  async requestPasswordReset(email: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      this.endpoints.requestPasswordReset,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }
+    );
+  }
+
+  /**
+   * Complete password reset with token and new password
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `${this.endpoints.resetPassword}/${token}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ password: newPassword }),
+      }
+    );
+  }
+
+  /**
+   * Resend email verification
+   */
+  async resendVerificationEmail(): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      this.endpoints.resendVerification,
+      { method: 'POST' },
+      true
+    );
+  }
+
+  /**
+   * Upload profile picture (multipart/form-data)
+   */
+  async uploadProfilePicture(file: File | Blob): Promise<{ message: string; url?: string }> {
+    const formData = new FormData();
+    formData.append('profile_picture', file);
+
+    const url = this.getUrl(this.endpoints.uploadProfilePicture);
+    const headers: Record<string, string> = { ...this.config.customHeaders };
+    const usingLocalStorage = await this.storage.shouldUseLocalStorage();
+    if (usingLocalStorage) {
+      const accessToken = await this.storage.getAccessToken();
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+    }
+    // Do NOT set Content-Type — browser sets multipart boundary automatically
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Upload failed: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Verify MFA token
+   */
+  async verifyMfa(email: string, mfaToken: string): Promise<AuthResponse> {
+    return this.request<AuthResponse>(
+      this.endpoints.verifyMfa,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, mfa_token: mfaToken }),
+      }
     );
   }
 

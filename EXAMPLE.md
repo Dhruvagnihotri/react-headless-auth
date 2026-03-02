@@ -246,11 +246,17 @@ function ProtectedRoute({ children }) {
 
 ### Add Email Verification
 
-**Backend:**
+**Backend:** Register email hooks using any email provider:
 ```python
-app.config['EMAIL_SERVICE'] = 'gmail'
-app.config['MAIL_USERNAME'] = 'your-email@gmail.com'
-app.config['MAIL_PASSWORD'] = 'your-app-password'
+app.config['FRONTEND_URL'] = 'http://localhost:3000'
+
+@auth.hook('send_verification_email')
+def send_verification(user, token, verification_url):
+    send_email(to=user['email'], subject='Verify your email', body=verification_url)
+
+@auth.hook('send_password_reset_email')
+def send_reset(user, token, reset_url):
+    send_email(to=user['email'], subject='Reset password', body=reset_url)
 ```
 
 Now users get verification emails automatically!

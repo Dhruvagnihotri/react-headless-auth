@@ -4,5 +4,7 @@
  */
 
 export { AuthClient } from './AuthClient';
+export { RBACClient } from './RBACClient';
+export { AdminClient } from './AdminClient';
 export { TokenStorage, LocalStorageAdapter } from './TokenStorage';
 export * from './types';
