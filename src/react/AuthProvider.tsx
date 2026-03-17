@@ -436,7 +436,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [client, hookManager]);
 
   /**
-   * Google OAuth login (browser only)
+   * Google OAuth login (browser only, full-page redirect)
    */
   const googleLogin = useCallback((redirectPath?: string) => {
     if (typeof window === 'undefined' || typeof window.location === 'undefined') {
@@ -453,7 +453,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [client]);
 
   /**
-   * Microsoft OAuth login (browser only)
+   * Microsoft OAuth login (browser only, full-page redirect)
    */
   const microsoftLogin = useCallback((redirectPath?: string) => {
     if (typeof window === 'undefined' || typeof window.location === 'undefined') {
@@ -468,6 +468,87 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     const url = client.getOAuthUrl('microsoft', redirectUri);
     window.location.href = url;
   }, [client]);
+
+  /**
+   * Open OAuth in a popup window. Returns a Promise that resolves when
+   * the popup completes authentication and sends tokens back via postMessage.
+   * Falls back to full-page redirect if popups are blocked.
+   */
+  const oauthLoginPopup = useCallback(async (
+    provider: 'google' | 'microsoft',
+    callbackPath: string = '/auth/oauth-callback'
+  ): Promise<{ success: boolean; error?: string }> => {
+    const callbackUrl = `${window.location.origin}${callbackPath}`;
+    const url = client.getOAuthUrl(provider, callbackUrl);
+
+    const width = 500;
+    const height = 650;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    const features = `popup=yes,width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`;
+
+    const popup = window.open(url, 'oauth_popup', features);
+
+    if (!popup || popup.closed) {
+      if (config.debug) {
+        console.warn('[AuthProvider] Popup blocked, falling back to redirect');
+      }
+      const redirectLogin = provider === 'google' ? googleLogin : microsoftLogin;
+      redirectLogin();
+      return { success: false, error: 'popup_blocked' };
+    }
+
+    popup.focus();
+
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      let resolved = false;
+
+      const cleanup = () => {
+        window.removeEventListener('message', handleMessage);
+        clearInterval(pollClosed);
+      };
+
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type !== 'oauth-tokens') return;
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+
+        const { access_token, refresh_token, error: popupError } = event.data;
+        if (access_token && refresh_token) {
+          try {
+            await completeAuthentication({ access_token, refresh_token });
+            resolve({ success: true });
+          } catch (err: any) {
+            resolve({ success: false, error: err.message });
+          }
+        } else {
+          resolve({ success: false, error: popupError || 'no_tokens' });
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      const pollClosed = setInterval(() => {
+        if (popup.closed && !resolved) {
+          resolved = true;
+          cleanup();
+          resolve({ success: false, error: 'popup_closed' });
+        }
+      }, 500);
+    });
+  }, [client, config.debug, completeAuthentication, googleLogin, microsoftLogin]);
+
+  const googleLoginPopup = useCallback(
+    (callbackPath?: string) => oauthLoginPopup('google', callbackPath),
+    [oauthLoginPopup]
+  );
+
+  const microsoftLoginPopup = useCallback(
+    (callbackPath?: string) => oauthLoginPopup('microsoft', callbackPath),
+    [oauthLoginPopup]
+  );
 
   /**
    * Get access token for making authenticated API calls
@@ -556,6 +637,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     verifyMfa,
     googleLogin,
     microsoftLogin,
+    googleLoginPopup,
+    microsoftLoginPopup,
     checkAuth,
     getAccessToken,
   };
