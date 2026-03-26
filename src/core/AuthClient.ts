@@ -558,14 +558,26 @@ export class AuthClient {
 
   /**
    * Get OAuth login URL
+   * @param provider - OAuth provider ('google' | 'microsoft')
+   * @param redirectUri - Frontend redirect URI after OAuth
+   * @param customParams - Optional key-value pairs passed as query params to the backend.
+   *   The backend stores them in the OAuth state and exposes them via
+   *   `g.oauth_custom_data` for after_request hooks (e.g. promo codes).
    */
-  getOAuthUrl(provider: 'google' | 'microsoft', redirectUri?: string): string {
+  getOAuthUrl(provider: 'google' | 'microsoft', redirectUri?: string, customParams?: Record<string, string>): string {
     const endpoint = provider === 'google' ? this.endpoints.googleLogin : this.endpoints.microsoftLogin;
     const url = this.getUrl(endpoint);
     
     const finalRedirectUri = redirectUri || (typeof window !== 'undefined' ? window.location.origin : '');
     
-    return `${url}?redirect_uri=${encodeURIComponent(finalRedirectUri)}`;
+    const params = new URLSearchParams({ redirect_uri: finalRedirectUri });
+    if (customParams) {
+      for (const [key, value] of Object.entries(customParams)) {
+        if (value) params.set(key, value);
+      }
+    }
+    
+    return `${url}?${params.toString()}`;
   }
 
   /**

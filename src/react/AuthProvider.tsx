@@ -476,10 +476,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
    */
   const oauthLoginPopup = useCallback(async (
     provider: 'google' | 'microsoft',
-    callbackPath: string = '/auth/oauth-callback'
+    callbackPath: string = '/auth/oauth-callback',
+    customParams?: Record<string, string>
   ): Promise<{ success: boolean; error?: string }> => {
     const callbackUrl = `${window.location.origin}${callbackPath}`;
-    const url = client.getOAuthUrl(provider, callbackUrl);
+    const url = client.getOAuthUrl(provider, callbackUrl, customParams);
 
     const width = 500;
     const height = 650;
@@ -541,12 +542,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [client, config.debug, completeAuthentication, googleLogin, microsoftLogin]);
 
   const googleLoginPopup = useCallback(
-    (callbackPath?: string) => oauthLoginPopup('google', callbackPath),
+    (callbackPath?: string, customParams?: Record<string, string>) => oauthLoginPopup('google', callbackPath, customParams),
     [oauthLoginPopup]
   );
 
   const microsoftLoginPopup = useCallback(
-    (callbackPath?: string) => oauthLoginPopup('microsoft', callbackPath),
+    (callbackPath?: string, customParams?: Record<string, string>) => oauthLoginPopup('microsoft', callbackPath, customParams),
     [oauthLoginPopup]
   );
 

@@ -30,8 +30,8 @@ export interface AuthContextValue {
   verifyMfa: (email: string, mfaToken: string) => Promise<any>;
   googleLogin: (redirectPath?: string) => void;
   microsoftLogin: (redirectPath?: string) => void;
-  googleLoginPopup: (callbackPath?: string) => Promise<{ success: boolean; error?: string }>;
-  microsoftLoginPopup: (callbackPath?: string) => Promise<{ success: boolean; error?: string }>;
+  googleLoginPopup: (callbackPath?: string, customParams?: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
+  microsoftLoginPopup: (callbackPath?: string, customParams?: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
   checkAuth: () => Promise<void>;
   
   /**
