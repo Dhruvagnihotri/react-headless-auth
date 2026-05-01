@@ -1,6 +1,6 @@
 {
   "name": "@headlesskits/react-headless-auth",
-  "version": "1.0.10",
+  "version": "1.0.12",
   "description": "🔐 Production-ready React authentication in 2 minutes. Smart cookie fallback (httpOnly → localStorage), automatic token refresh, zero dependencies. Pairs with flask-headless-auth for 20+ backend routes. OAuth, JWT, TypeScript-first. Free Auth0/Clerk alternative.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

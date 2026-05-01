@@ -224,13 +224,14 @@ export class AuthClient {
           console.error('[AuthClient] Refresh failed, clearing tokens');
         }
         await this.storage.clearTokens();
-        throw new Error('Authentication failed: Invalid or expired token');
+        throw new Error(`Authentication failed (401): Invalid or expired token`);
       }
     }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`);
+      const detail = errorData.error || errorData.message || 'Unknown error';
+      throw new Error(`Request failed (${response.status}): ${detail}`);
     }
 
     return response.json();
