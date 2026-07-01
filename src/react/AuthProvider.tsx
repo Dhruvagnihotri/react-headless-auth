@@ -590,6 +590,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [client, refreshUser]);
 
   /**
+   * Change email address.
+   * Backend re-issues tokens bound to the new email; we complete
+   * authentication with them (localStorage mode) and refresh user state.
+   */
+  const changeEmail = useCallback(async (newEmail: string, password: string) => {
+    try {
+      const response = await client.changeEmail(newEmail, password);
+
+      if (response.access_token && response.refresh_token) {
+        await completeAuthentication({
+          access_token: response.access_token,
+          refresh_token: response.refresh_token,
+        });
+      }
+      if (response.user) {
+        setUser(response.user);
+      } else {
+        await refreshUser();
+      }
+
+      await hookManager.trigger('afterUserUpdate', { user: response.user });
+
+      return { success: true, message: response.message, user: response.user };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }, [client, completeAuthentication, refreshUser, hookManager]);
+
+  /**
+   * Delete the authenticated user's account, then clear local session.
+   */
+  const deleteAccount = useCallback(async (password?: string) => {
+    try {
+      const result = await client.deleteAccount(password);
+
+      setIsAuthenticated(false);
+      setUser(null);
+      await storage.clearTokens();
+      pendingTokens.current = null;
+      await client.cleanup();
+
+      return { success: true, message: result.message };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }, [client, storage]);
+
+  /**
    * Verify MFA token
    */
   const verifyMfa = useCallback(async (email: string, mfaToken: string) => {
@@ -635,6 +683,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     resetPassword,
     resendVerificationEmail,
     uploadProfilePicture,
+    changeEmail,
+    deleteAccount,
     verifyMfa,
     googleLogin,
     microsoftLogin,

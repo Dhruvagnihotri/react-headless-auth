@@ -187,6 +187,8 @@ export interface AuthEndpoints {
   resendVerification: string;
   uploadProfilePicture: string;
   verifyMfa: string;
+  changeEmail: string;
+  deleteAccount: string;
 }
 
 export type StorageStrategy = 'cookie-first' | 'localStorage-only' | 'auto';

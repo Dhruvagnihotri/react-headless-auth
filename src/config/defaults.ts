@@ -37,4 +37,6 @@ export const DEFAULT_ENDPOINTS: AuthEndpoints = {
   resendVerification: '/resend-verification-email',
   uploadProfilePicture: '/upload-profile-picture',
   verifyMfa: '/verify-mfa',
+  changeEmail: '/change-email',
+  deleteAccount: '/delete-account',
 };

@@ -27,6 +27,8 @@ export interface AuthContextValue {
   resetPassword: (token: string, newPassword: string) => Promise<{ message: string }>;
   resendVerificationEmail: () => Promise<{ message: string }>;
   uploadProfilePicture: (file: File | Blob) => Promise<{ message: string; url?: string }>;
+  changeEmail: (newEmail: string, password: string) => Promise<{ success: boolean; error?: string; message?: string; user?: User }>;
+  deleteAccount: (password?: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   verifyMfa: (email: string, mfaToken: string) => Promise<any>;
   googleLogin: (redirectPath?: string) => void;
   microsoftLogin: (redirectPath?: string) => void;

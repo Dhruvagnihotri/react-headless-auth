@@ -34,6 +34,8 @@ const DEFAULT_ENDPOINTS: AuthEndpoints = {
   resendVerification: '/resend-verification-email',
   uploadProfilePicture: '/upload-profile-picture',
   verifyMfa: '/verify-mfa',
+  changeEmail: '/change-email',
+  deleteAccount: '/delete-account',
 };
 
 /**
@@ -365,6 +367,39 @@ export class AuthClient {
         body: JSON.stringify({ password: newPassword }),
       }
     );
+  }
+
+  /**
+   * Change the authenticated user's email address.
+   * Backend re-issues tokens bound to the new email (body + cookies) and
+   * marks the account unverified pending re-verification.
+   */
+  async changeEmail(newEmail: string, password: string): Promise<AuthResponse> {
+    return this.request<AuthResponse>(
+      this.endpoints.changeEmail,
+      {
+        method: 'POST',
+        body: JSON.stringify({ new_email: newEmail, password }),
+      },
+      true
+    );
+  }
+
+  /**
+   * Permanently delete the authenticated user's account.
+   * Backend blacklists the current token and clears auth cookies.
+   */
+  async deleteAccount(password?: string): Promise<{ message: string }> {
+    const result = await this.request<{ message: string }>(
+      this.endpoints.deleteAccount,
+      {
+        method: 'POST',
+        body: JSON.stringify(password ? { password } : {}),
+      },
+      true
+    );
+    await this.storage.clearTokens();
+    return result;
   }
 
   /**
