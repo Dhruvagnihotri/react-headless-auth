@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, ReactNode } f
 import { AuthContext } from './AuthContext';
 import { AuthClient } from '../core/AuthClient';
 import { TokenStorage } from '../core/TokenStorage';
+import { waitForPopupResult } from '../core/waitForPopupResult';
 import { HookManager } from '../extensibility/hooks';
 import { validateConfig } from '../config/validator';
 import type { AuthConfig, User } from '../core/types';
@@ -501,43 +502,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
 
     popup.focus();
 
-    return new Promise<{ success: boolean; error?: string }>((resolve) => {
-      let resolved = false;
-
-      const cleanup = () => {
-        window.removeEventListener('message', handleMessage);
-        clearInterval(pollClosed);
-      };
-
-      const handleMessage = async (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) return;
-        if (event.data?.type !== 'oauth-tokens') return;
-        if (resolved) return;
-        resolved = true;
-        cleanup();
-
-        const { access_token, refresh_token, error: popupError } = event.data;
-        if (access_token && refresh_token) {
-          try {
-            await completeAuthentication({ access_token, refresh_token });
-            resolve({ success: true });
-          } catch (err: any) {
-            resolve({ success: false, error: err.message });
-          }
-        } else {
-          resolve({ success: false, error: popupError || 'no_tokens' });
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      const pollClosed = setInterval(() => {
-        if (popup.closed && !resolved) {
-          resolved = true;
-          cleanup();
-          resolve({ success: false, error: 'popup_closed' });
-        }
-      }, 500);
+    // The actual "wait for message / closed / timeout" mechanic lives in
+    // waitForPopupResult (src/core) - pulled out so it's covered by a
+    // real, jsdom-free unit test instead of only manual reasoning. This
+    // wrapper's job is just supplying the browser bits that genuinely
+    // need this component's own state (the popup handle, this origin,
+    // and completeAuthentication for wiring the received tokens into
+    // this provider's auth state).
+    return waitForPopupResult({
+      popup,
+      expectedOrigin: window.location.origin,
+      messageType: 'oauth-tokens',
+      onTokens: completeAuthentication,
     });
   }, [client, config.debug, completeAuthentication, googleLogin, microsoftLogin]);
 

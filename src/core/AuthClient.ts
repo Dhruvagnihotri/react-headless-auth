@@ -48,6 +48,27 @@ export class AuthClient {
   private refreshPromise: Promise<boolean> | null = null;
   private refreshTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+  // Cross-tab refresh coordination. `refreshPromise` above only dedupes
+  // concurrent calls WITHIN one AuthClient instance - each browser tab
+  // gets its own instance (see AuthProvider's useMemo), so two tabs whose
+  // JWTs happen to expire around the same moment can each independently
+  // decide to POST tokenRefresh at once. Depending on the backend's
+  // refresh-token semantics (single-use rotation with the old token
+  // blacklisted, vs. reusable until expiry) the loser can get a 401 and
+  // be treated as "session expired" by its tab even though the winner's
+  // tab is still validly logged in. This uses a localStorage-based lock
+  // (not BroadcastChannel, for broader/older browser support and because
+  // this file already assumes localStorage may be present via
+  // TokenStorage) so a tab that sees another tab mid-refresh waits for it
+  // instead of racing it.
+  private readonly instanceId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  private static readonly REFRESH_LOCK_KEY = '__auth_refresh_lock__';
+  // Safety valve, not a normal-case timeout: if a tab crashes/navigates
+  // away mid-refresh, its lock would otherwise never clear and every
+  // other tab would wait forever. A real refresh completes in well under
+  // this window; it only matters when something already went wrong.
+  private static readonly REFRESH_LOCK_TTL_MS = 10_000;
+
   constructor(config: AuthConfig, storage: TokenStorage) {
     // Apply defaults
     const apiPrefix = config.apiPrefix ?? '/api/auth';
@@ -179,6 +200,111 @@ export class AuthClient {
       clearTimeout(this.refreshTimeoutId);
       this.refreshTimeoutId = null;
     }
+  }
+
+  /**
+   * Try to take the cross-tab refresh lock. Returns true if this tab now
+   * holds it (proceed with the actual refresh), false if another tab
+   * already holds a non-stale lock (wait on it instead - see
+   * waitForOtherTabRefresh). Fails OPEN (returns true) whenever
+   * localStorage isn't usable - SSR, React Native, privacy modes that
+   * block storage, etc. - so environments without cross-tab risk (or
+   * without the means to coordinate at all) get exactly today's
+   * single-tab-safe behavior, never worse.
+   */
+  private acquireRefreshLock(): boolean {
+    if (typeof window === 'undefined') return true;
+    try {
+      // The `.localStorage` property read itself, not just the methods
+      // called on it, can throw in some environments (a sandboxed iframe
+      // without allow-same-origin, certain legacy private-browsing
+      // modes) - reading it inside this try, not in a guard above it,
+      // is what keeps this failing open in those cases too.
+      if (!window.localStorage) return true;
+      const raw = window.localStorage.getItem(AuthClient.REFRESH_LOCK_KEY);
+      if (raw) {
+        const existing = JSON.parse(raw) as { id: string; ts: number };
+        if (Date.now() - existing.ts < AuthClient.REFRESH_LOCK_TTL_MS) {
+          return false;
+        }
+        // Stale lock from a crashed/navigated-away tab - fine to take over.
+      }
+
+      const mine = { id: this.instanceId, ts: Date.now() };
+      window.localStorage.setItem(AuthClient.REFRESH_LOCK_KEY, JSON.stringify(mine));
+
+      // localStorage has no atomic compare-and-set, so two tabs writing in
+      // the same instant would both believe they'd won (last write simply
+      // wins silently). Re-reading right after writing can't make this
+      // fully atomic either, but it narrows the race from "whenever both
+      // tabs' refresh timers/401s happen to land close together" (the bug
+      // this fix exists for) down to "the same microsecond" - and even in
+      // that residual case, the outcome is no worse than before this fix
+      // existed (both tabs proceed).
+      const confirm = window.localStorage.getItem(AuthClient.REFRESH_LOCK_KEY);
+      return confirm === JSON.stringify(mine);
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Release the cross-tab refresh lock, but only if this tab still holds
+   * it (never clear a lock some other tab has since taken, e.g. after
+   * this one's lock went stale and was overtaken).
+   */
+  private releaseRefreshLock(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      // See the matching comment in acquireRefreshLock - the property
+      // read itself belongs inside the try, not guarded above it.
+      if (!window.localStorage) return;
+      const raw = window.localStorage.getItem(AuthClient.REFRESH_LOCK_KEY);
+      if (!raw) return;
+      const existing = JSON.parse(raw) as { id: string; ts: number };
+      if (existing.id === this.instanceId) {
+        window.localStorage.removeItem(AuthClient.REFRESH_LOCK_KEY);
+      }
+    } catch {
+      // Best-effort - a leftover lock just falls back to the TTL above.
+    }
+  }
+
+  /**
+   * Wait for another tab's in-flight refresh to finish, instead of
+   * starting a redundant/racing one of our own. Resolves `true` either
+   * way once the other tab's lock clears (or the TTL safety valve fires)
+   * - this deliberately does not try to know whether the OTHER tab's
+   * refresh actually succeeded. If it didn't, the request that triggered
+   * this call gets its own 401 on retry and fails through the normal,
+   * already-correct single-tab path; this only removes the redundant
+   * network call in the common, harmless case.
+   */
+  private waitForOtherTabRefresh(): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout>;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener('storage', onStorage);
+        clearTimeout(timeoutId);
+        resolve(true);
+      };
+
+      // `storage` events fire only in OTHER tabs/windows, never the tab
+      // that made the change - exactly the cross-tab-only signal wanted
+      // here, with no risk of a tab reacting to its own write.
+      const onStorage = (event: StorageEvent) => {
+        if (event.key === AuthClient.REFRESH_LOCK_KEY && event.newValue === null) {
+          finish();
+        }
+      };
+      window.addEventListener('storage', onStorage);
+
+      timeoutId = setTimeout(finish, AuthClient.REFRESH_LOCK_TTL_MS);
+    });
   }
 
   /**
@@ -509,7 +635,7 @@ export class AuthClient {
    * Refresh access token with race condition protection
    */
   async refreshToken(): Promise<boolean> {
-    // Prevent multiple simultaneous refresh attempts
+    // Prevent multiple simultaneous refresh attempts within this tab
     if (this.refreshPromise) {
       if (this.config.debug) {
         console.log('[AuthClient] Refresh already in progress, waiting...');
@@ -517,11 +643,21 @@ export class AuthClient {
       return this.refreshPromise;
     }
 
+    if (!this.acquireRefreshLock()) {
+      if (this.config.debug) {
+        console.log('[AuthClient] Another tab is refreshing, waiting for it instead of racing...');
+      }
+      return this.waitForOtherTabRefresh();
+    }
+
     this.refreshPromise = this._performRefresh();
-    const result = await this.refreshPromise;
-    this.refreshPromise = null;
-    
-    return result;
+    try {
+      const result = await this.refreshPromise;
+      return result;
+    } finally {
+      this.refreshPromise = null;
+      this.releaseRefreshLock();
+    }
   }
 
   /**
