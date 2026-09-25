@@ -63,6 +63,24 @@ export class AuthClient {
   // instead of racing it.
   private readonly instanceId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   private static readonly REFRESH_LOCK_KEY = '__auth_refresh_lock__';
+  // Floor on the proactive-refresh delay computed in scheduleTokenRefresh.
+  // The primary fix for the incident below is scheduling from the token's
+  // own exp/iat claim interval (skew-immune - see scheduleTokenRefresh),
+  // but this floor stays as a backstop for the exp-only branch (no iat
+  // claim) and for any other bug that could feed a negative/near-zero
+  // delay: a device with a skewed clock comparing a server-issued `exp`
+  // against its own Date.now() sees "refreshTime - Date.now()" as already
+  // negative on every single refresh, since the server always issues a
+  // correctly-dated token and the skew never corrects itself - Math.max(0,
+  // ...) alone let that reschedule fire again immediately, forever, bound
+  // only by network round-trip time. Confirmed in production: one account
+  // with a skewed clock generated ~880K token.refresh audit rows over
+  // several days (up to ~4.4/sec sustained for a full day) before
+  // self-resolving. The reactive 401-triggered refresh (AuthClient.request
+  // and the standalone createAuthFetch helper) is entirely separate from
+  // this scheduling path and still refreshes immediately when a request
+  // actually needs it, regardless of this floor.
+  private static readonly MIN_PROACTIVE_REFRESH_DELAY_MS = 60_000;
   // Safety valve, not a normal-case timeout: if a tab crashes/navigates
   // away mid-refresh, its lock would otherwise never clear and every
   // other tab would wait forever. A real refresh completes in well under
@@ -139,8 +157,17 @@ export class AuthClient {
     try {
       const parts = token.split('.');
       if (parts.length !== 3) return null;
-      
-      const payload = JSON.parse(atob(parts[1]));
+
+      // JWT payload segments are base64url (RFC 7519), not standard base64:
+      // '-'/'_' instead of '+'/'/', and no padding. atob() only accepts
+      // standard base64 and throws on '-'/'_', which real flask-jwt-extended
+      // tokens contain often enough (any payload of a few hundred bytes) to
+      // make this fail unpredictably depending on token content - falling
+      // through to the 50-minute fallback schedule below, well past a
+      // 15-minute token's actual expiry.
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+      const payload = JSON.parse(atob(padded));
       return payload;
     } catch (error) {
       if (this.config.debug) {
@@ -161,17 +188,43 @@ export class AuthClient {
     }
 
     const payload = this.decodeJWT(token);
-    
-    if (payload?.exp) {
-      // JWT has expiry - refresh 5 minutes before expiration
+    const leadMs = 5 * 60 * 1000;
+
+    if (payload?.exp && payload?.iat) {
+      // Both exp and iat are timestamps the SERVER issued - their
+      // difference is a pure duration with no client Date.now() in it at
+      // all, so client clock skew cannot affect it. setTimeout measures
+      // real elapsed time from now regardless of what the client's clock
+      // claims "now" is, so scheduling from this duration (rather than
+      // comparing an absolute server timestamp against Date.now(), as the
+      // exp-only branch below still does) is genuinely skew-immune, not
+      // just bounded by the floor.
+      const tokenLifetimeMs = (payload.exp - payload.iat) * 1000;
+      const delay = Math.max(AuthClient.MIN_PROACTIVE_REFRESH_DELAY_MS, tokenLifetimeMs - leadMs);
+
+      if (this.config.debug) {
+        console.log(`[AuthClient] Scheduling token refresh in ${Math.floor(delay / 1000)}s (claim-interval, skew-immune)`);
+      }
+
+      this.refreshTimeoutId = setTimeout(async () => {
+        if (this.config.debug) {
+          console.log('[AuthClient] JWT-aware token refresh triggered');
+        }
+        await this.refreshToken();
+      }, delay);
+    } else if (payload?.exp) {
+      // No iat claim to derive a skew-immune duration from - fall back to
+      // comparing the server's exp against this device's own clock. The
+      // floor still bounds the damage if that clock is skewed, but can't
+      // eliminate the loop the way the branch above does.
       const expiryTime = payload.exp * 1000;
-      const refreshTime = expiryTime - (5 * 60 * 1000);
-      const delay = Math.max(0, refreshTime - Date.now());
-      
+      const refreshTime = expiryTime - leadMs;
+      const delay = Math.max(AuthClient.MIN_PROACTIVE_REFRESH_DELAY_MS, refreshTime - Date.now());
+
       if (this.config.debug) {
         console.log(`[AuthClient] Scheduling token refresh in ${Math.floor(delay / 1000)}s (expires at ${new Date(expiryTime).toISOString()})`);
       }
-      
+
       this.refreshTimeoutId = setTimeout(async () => {
         if (this.config.debug) {
           console.log('[AuthClient] JWT-aware token refresh triggered');
