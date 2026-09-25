@@ -98,7 +98,7 @@ describe('AuthClient proactive refresh scheduling', () => {
 
   it('schedules from the exp/iat claim interval, immune to client clock skew', async () => {
     const iat = Math.floor(Date.now() / 1000);
-    const token = makeJwt({ iat, exp: iat + 900 }); // real 15-minute token
+    const token = makeJwt({ iat, exp: iat + 900 }); // real 15-minute token, honest server clock
 
     let refreshCalls = 0;
     (globalThis as any).fetch = vi.fn(async () => {
@@ -106,16 +106,21 @@ describe('AuthClient proactive refresh scheduling', () => {
       return { ok: true, json: async () => ({ access_token: token, refresh_token: 'r.r.r' }) } as Response;
     });
 
+    // Skew applied BEFORE scheduling, not after: scheduleTokenRefresh
+    // reads Date.now() synchronously at call time (in the branches that
+    // still use it), so skewing the clock only AFTER an armed setTimeout
+    // exists would test nothing - the timer's already-computed delay
+    // can't retroactively change.
+    vi.setSystemTime(Date.now() + 20 * 60 * 1000);
+
     const client = makeClient();
     client.initializeRefreshSchedule(token);
 
-    // Simulate a client clock that's 20 minutes fast, mid-wait. The
-    // exp/iat-derived delay doesn't reference Date.now() at all, so this
-    // must have no effect on when the timer fires.
-    vi.setSystemTime(Date.now() + 20 * 60 * 1000);
-
-    // 900s lifetime - 300s lead = 600s. Not before, and not the 60s floor
-    // either (proves this isn't just falling back to the floor).
+    // 900s lifetime - 300s lead = 600s. This is the discriminating part:
+    // under the old exp-vs-Date.now() comparison (or the exp-only
+    // fallback branch), this same 20-minute-fast clock would make the
+    // comparison land on the 60s floor instead. Firing at exactly 600s,
+    // not 60s, proves the claim-interval branch is what actually ran.
     await vi.advanceTimersByTimeAsync(599_000);
     expect(refreshCalls).toBe(0);
     await vi.advanceTimersByTimeAsync(1_000);
@@ -123,18 +128,28 @@ describe('AuthClient proactive refresh scheduling', () => {
   });
 
   it('does not burst on the next cycle - the loop is eliminated, not just slowed', async () => {
-    const iat = Math.floor(Date.now() / 1000);
-    const token = makeJwt({ iat, exp: iat + 900 });
+    // A fixed, honest server-clock reference, captured once and advanced
+    // manually by exactly how much simulated time actually elapses per
+    // cycle. Deliberately NOT re-derived from the client's Date.now()
+    // inside the mock - the incident's whole premise is a SERVER clock
+    // that stays honest while the CLIENT's is skewed, so a mock that
+    // dates fresh tokens off the (skewed) client clock would erase that
+    // distinction and let this test pass even against the original bug.
+    let serverEpoch = Math.floor(Date.now() / 1000);
+    const token = makeJwt({ iat: serverEpoch, exp: serverEpoch + 900 });
 
     let refreshCalls = 0;
     (globalThis as any).fetch = vi.fn(async () => {
       refreshCalls++;
-      // Each refresh returns a fresh token with its own fresh iat/exp,
-      // exactly like the real backend does.
-      const newIat = Math.floor(Date.now() / 1000);
-      const newToken = makeJwt({ iat: newIat, exp: newIat + 900 });
+      serverEpoch += 600;
+      const newToken = makeJwt({ iat: serverEpoch, exp: serverEpoch + 900 });
       return { ok: true, json: async () => ({ access_token: newToken, refresh_token: 'r.r.r' }) } as Response;
     });
+
+    // Client clock 20 minutes fast throughout - applied before the first
+    // schedule and held across both cycles, exactly like the real
+    // incident (the skew never self-corrects between refreshes).
+    vi.setSystemTime(Date.now() + 20 * 60 * 1000);
 
     const client = makeClient();
     client.initializeRefreshSchedule(token);
@@ -142,10 +157,10 @@ describe('AuthClient proactive refresh scheduling', () => {
     await vi.advanceTimersByTimeAsync(600_000);
     expect(refreshCalls).toBe(1);
 
-    // If this were still comparing an absolute exp against a still-honest
-    // Date.now(), the second cycle would also land ~600s later. The old
-    // bug's signature was the SECOND (and every subsequent) cycle firing
-    // near-instantly instead.
+    // If this were still comparing the server's honest exp against the
+    // client's skewed Date.now(), the second cycle would land on the 60s
+    // floor instead of 600s - the old bug's signature was every cycle
+    // after the first firing near-instantly, not just the first one.
     await vi.advanceTimersByTimeAsync(599_000);
     expect(refreshCalls).toBe(1);
     await vi.advanceTimersByTimeAsync(1_000);
