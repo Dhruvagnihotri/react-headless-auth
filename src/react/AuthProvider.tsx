@@ -288,6 +288,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   }, [extractOAuthTokensFromUrl, completeAuthentication, checkAuth, onReady]);
 
   /**
+   * Re-validate auth when the tab regains visibility.
+   *
+   * The proactive refresh schedule (AuthClient.scheduleTokenRefresh) is a
+   * setTimeout chain - browsers throttle or fully suspend timers in a
+   * backgrounded tab, and an OS-level sleep stops JS execution entirely.
+   * A tab left idle for hours (closed laptop lid, long meeting, etc.) can
+   * come back to an access token that's been expired the whole time with
+   * no refresh ever having fired, and nothing else notices until the user
+   * happens to trigger an authenticated request - at which point
+   * createAuthFetch's reactive 401 handling *should* recover it, but if
+   * the first thing they do is a request that bypasses that wrapper (or
+   * the refresh race loses for an unrelated reason), they get silently
+   * bounced to a login screen with zero warning, mid-interaction, for what
+   * looks to them like no reason at all.
+   *
+   * checkAuth() already does the right escalation - a cheap "am I still
+   * logged in" check, only falling back to a real refresh if that fails -
+   * so re-running it on every genuine hidden->visible transition costs one
+   * lightweight request in the common case (token still valid) and
+   * recovers the rare "expired while away" case immediately on return,
+   * instead of waiting for the user to stumble into it. Guarded to run
+   * only in a real browser document (React Native has no
+   * `visibilitychange` - see AppState for the RN equivalent, intentionally
+   * not handled here) and only after the initial mount check has run, so
+   * this is strictly additive to - never a replacement for - that check.
+   */
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
+      return;
+    }
+
+    let revalidating = false;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!hasCheckedAuth.current || revalidating || !isAuthenticated) return;
+
+      revalidating = true;
+      checkAuth().finally(() => {
+        revalidating = false;
+      });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isAuthenticated, checkAuth]);
+
+  /**
    * Login
    */
   const login = useCallback(async (email: string, password: string) => {
