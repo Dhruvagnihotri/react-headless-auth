@@ -64,6 +64,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   const [user, setUser] = useState<User | null>(null);
   const hasCheckedAuth = useRef(false);
   const pendingTokens = useRef<{ access_token: string; refresh_token: string } | null>(null);
+  // Guards the visibilitychange re-validation effect below against an
+  // overlapping second call - a ref so it survives that effect
+  // re-subscribing mid-flight, unlike a plain closure variable.
+  const isRevalidatingOnFocus = useRef(false);
 
   /**
    * Refresh access token
@@ -311,23 +315,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
    * instead of waiting for the user to stumble into it. Guarded to run
    * only in a real browser document (React Native has no
    * `visibilitychange` - see AppState for the RN equivalent, intentionally
-   * not handled here) and only after the initial mount check has run, so
-   * this is strictly additive to - never a replacement for - that check.
+   * not handled here).
+   *
+   * Deliberately skipped while `navigator.onLine` is false. Both
+   * `client.checkAuth()` and `_performRefresh()` catch a thrown network
+   * error and return `false` from that catch block - the exact same value
+   * they return for a real 401 - so without this check, a tab waking from
+   * sleep or coming off airplane mode with no network *yet* (the dominant
+   * real-world version of the "idle tab" scenario this effect targets)
+   * would read as "session expired" and log a still-valid session out,
+   * reproducing the silent-bounce bug this effect exists to fix instead of
+   * preventing it. `navigator.onLine` is a coarse, best-effort signal (it
+   * can read true while a request still fails for some other transient
+   * reason) rather than a true connectivity check, but it reliably covers
+   * the no-network-at-all case without touching checkAuth()/refreshToken()'s
+   * existing error handling - which every other caller (the mount check,
+   * the reactive 401 path) already depends on behaving as it does today.
+   *
+   * `isRevalidatingOnFocus` is a ref, not a local closure variable, so it
+   * survives this effect re-subscribing when `isAuthenticated`/`checkAuth`
+   * change identity mid-flight (e.g. because a check already in progress
+   * flips `isRefreshingToken`) - a plain closure variable would reset to
+   * false on every re-subscribe and stop guarding against an overlapping
+   * second call from a second focus event during that window.
    */
   useEffect(() => {
     if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
       return;
     }
 
-    let revalidating = false;
-
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
-      if (!hasCheckedAuth.current || revalidating || !isAuthenticated) return;
+      if (isRevalidatingOnFocus.current || !isAuthenticated) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
-      revalidating = true;
+      isRevalidatingOnFocus.current = true;
       checkAuth().finally(() => {
-        revalidating = false;
+        isRevalidatingOnFocus.current = false;
       });
     };
 
