@@ -8,6 +8,7 @@ export const DEFAULT_AUTH_CONFIG: Partial<AuthConfig> = {
   apiPrefix: '/api/auth',
   storageStrategy: 'cookie-first',
   tokenRefreshInterval: 55 * 60 * 1000, // 55 minutes
+  enableProactiveRefresh: true,
   enableGoogle: false,
   enableMicrosoft: false,
   enablePostHog: false,

@@ -98,6 +98,7 @@ export class AuthClient {
       apiPrefix,
       storageStrategy: config.storageStrategy ?? 'cookie-first',
       tokenRefreshInterval: config.tokenRefreshInterval ?? 55 * 60 * 1000,
+      enableProactiveRefresh: config.enableProactiveRefresh ?? true,
       enableGoogle: config.enableGoogle ?? false,
       enableMicrosoft: config.enableMicrosoft ?? false,
       googleClientId: config.googleClientId ?? '',
@@ -185,6 +186,20 @@ export class AuthClient {
     if (this.refreshTimeoutId) {
       clearTimeout(this.refreshTimeoutId);
       this.refreshTimeoutId = null;
+    }
+
+    // enableProactiveRefresh: false means every authenticated call already
+    // goes through createAuthFetch/useAuthFetch's reactive refresh-on-401,
+    // so there's nothing for a background timer to do except keep an
+    // untouched session artificially fresh - exactly what a server-side
+    // inactivity timeout needs NOT to happen. Returning here (after
+    // clearing any existing timeout above) means toggling this off also
+    // cancels an already-scheduled refresh, not just future ones.
+    if (!this.config.enableProactiveRefresh) {
+      if (this.config.debug) {
+        console.log('[AuthClient] Proactive refresh disabled - relying on reactive refresh-on-401 only');
+      }
+      return;
     }
 
     const payload = this.decodeJWT(token);

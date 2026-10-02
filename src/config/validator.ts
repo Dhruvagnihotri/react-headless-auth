@@ -47,6 +47,7 @@ export function validateConfig(config: Partial<AuthConfig>): Required<AuthConfig
     apiPrefix,
     storageStrategy: config.storageStrategy ?? DEFAULT_AUTH_CONFIG.storageStrategy!,
     tokenRefreshInterval: config.tokenRefreshInterval ?? DEFAULT_AUTH_CONFIG.tokenRefreshInterval!,
+    enableProactiveRefresh: config.enableProactiveRefresh ?? DEFAULT_AUTH_CONFIG.enableProactiveRefresh!,
     enableGoogle: config.enableGoogle ?? DEFAULT_AUTH_CONFIG.enableGoogle!,
     enableMicrosoft: config.enableMicrosoft ?? DEFAULT_AUTH_CONFIG.enableMicrosoft!,
     googleClientId: config.googleClientId ?? '',

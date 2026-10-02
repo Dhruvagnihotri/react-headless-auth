@@ -206,7 +206,22 @@ export interface AuthConfig {
   apiPrefix?: string;
   storageStrategy?: StorageStrategy;
   tokenRefreshInterval?: number;
-  
+  // Proactively re-schedules a token refresh ~5min before every access
+  // token's expiry, forever, independent of any real request ever being
+  // made - keeps a tab silently authenticated even if nobody does
+  // anything in it. Defaults true for backward compatibility (existing
+  // consumers may rely on tokens always being fresh without wrapping
+  // their own fetches in createAuthFetch/useAuthFetch's reactive
+  // refresh-on-401 retry). Set false if your app's authenticated calls
+  // all go through that wrapper already (confirm this first - a gap would
+  // mean an expired token just fails, with nothing to retry it) and you
+  // want token refreshes to only happen in response to real use - e.g. to
+  // make a server-side inactivity timeout (AUTHSVC_SESSION_INACTIVITY_TIMEOUT
+  // in flask-headless-auth) measure genuine inactivity instead of "is the
+  // tab merely open," which this proactive loop defeats by refreshing an
+  // untouched session every ~10 minutes regardless of real activity.
+  enableProactiveRefresh?: boolean;
+
   // OAuth
   enableGoogle?: boolean;
   enableMicrosoft?: boolean;
