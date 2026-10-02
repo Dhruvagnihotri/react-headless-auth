@@ -73,20 +73,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
    * Refresh access token
    */
   const refreshAccessToken = useCallback(async (): Promise<boolean> => {
-    if (isRefreshingToken) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      return isAuthenticated;
-    }
-
+    // isRefreshingToken is UI-display state only (so consumers can show a
+    // "refreshing..." indicator) - it must never gate whether this
+    // actually calls client.refreshToken(). The old gate here slept a
+    // FIXED 100ms and returned the stale, closure-captured isAuthenticated
+    // value instead of the real result - fine when a refresh reliably
+    // finished inside 100ms (true in practice while the proactive
+    // scheduler kept access tokens from ever really expiring), but a
+    // concurrent caller whose refresh takes longer (slow network, server
+    // under load) got a stale "true" back, retried the ORIGINAL request
+    // with the still-expired token via createAuthFetch, got a second 401,
+    // and had no retries left (maxRetries defaults to 1) - a hard failure
+    // for what should have been a transparent, successful retry.
+    // client.refreshToken() already dedupes correctly on its own - a
+    // shared in-flight promise within this tab, a cross-tab lock across
+    // tabs - so every caller just awaits the SAME real result instead of
+    // each reimplementing (and in this case, getting wrong) its own
+    // dedup. This matters more now that enableProactiveRefresh can be
+    // turned off: with no proactive timer, every return from more than
+    // one access-token lifetime idle goes through this exact reactive
+    // path, instead of rarely needing it at all.
     setIsRefreshingToken(true);
-    
+
     try {
       await hookManager.trigger('beforeTokenRefresh', {});
-      
+
       const success = await client.refreshToken();
-      
+
       await hookManager.trigger('afterTokenRefresh', { success });
-      
+
       setIsAuthenticated(success);
       return success;
     } catch (error: any) {
@@ -95,7 +110,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     } finally {
       setIsRefreshingToken(false);
     }
-  }, [client, hookManager, isRefreshingToken, isAuthenticated]);
+  }, [client, hookManager]);
 
   /**
    * Fetch user data

@@ -188,13 +188,19 @@ export class AuthClient {
       this.refreshTimeoutId = null;
     }
 
-    // enableProactiveRefresh: false means every authenticated call already
-    // goes through createAuthFetch/useAuthFetch's reactive refresh-on-401,
-    // so there's nothing for a background timer to do except keep an
-    // untouched session artificially fresh - exactly what a server-side
-    // inactivity timeout needs NOT to happen. Returning here (after
-    // clearing any existing timeout above) means toggling this off also
-    // cancels an already-scheduled refresh, not just future ones.
+    // enableProactiveRefresh: false requires every authenticated call to
+    // already go through createAuthFetch/useAuthFetch's reactive
+    // refresh-on-401, or AuthClient's own built-in retry (request(), used
+    // by login/signup/getUser/updateUser/checkAuth/etc.) - NOT just those
+    // two helpers specifically. A raw fetch/axios/SWR fetcher, an
+    // EventSource/WebSocket, or a cookie-authed <img>/<a download> that
+    // bypasses all of them has no retry path at all and will just fail
+    // once the access token expires. Confirm this before disabling: with
+    // the flag off, there's nothing left to keep an untouched session
+    // artificially fresh - exactly what a server-side inactivity timeout
+    // needs NOT to happen. Returning here (after clearing any existing
+    // timeout above) means toggling this off also cancels an
+    // already-scheduled refresh, not just future ones.
     if (!this.config.enableProactiveRefresh) {
       if (this.config.debug) {
         console.log('[AuthClient] Proactive refresh disabled - relying on reactive refresh-on-401 only');

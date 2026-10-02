@@ -114,9 +114,25 @@ describe('AuthClient enableProactiveRefresh toggle', () => {
     const result = await client.refreshToken();
     expect(result).toBe(true);
     expect(refreshCalls).toBe(1);
+
+    // _performRefresh's own success path re-arms scheduleTokenRefresh for
+    // the next cycle (AuthClient.ts, both storage-mode branches) - that
+    // re-arm must ALSO respect the flag, or every reactive refresh would
+    // quietly restart the exact proactive loop this flag exists to stop.
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(refreshCalls).toBe(1);
   });
 
-  it('turning proactive refresh off cancels an already-scheduled timer', async () => {
+  it('a disabled client never leaves a previously-armed timer running', async () => {
+    // There's no public API to toggle enableProactiveRefresh after
+    // construction (config is private, no setter, getConfig() returns a
+    // copy) - the real-world equivalent is AuthProvider building a fresh
+    // AuthClient when its config prop changes, with the old client's timer
+    // cleared by the provider's own unmount cleanup. This test instead
+    // pins the clear-before-return ordering directly inside
+    // scheduleTokenRefresh itself: if the early-return guard were ever
+    // moved above the clearTimeout call, a timer armed before the guard
+    // existed would keep firing even on an otherwise-disabled client.
     const iat = Math.floor(Date.now() / 1000);
     const token = makeJwt({ iat, exp: iat + 900 });
 
@@ -129,8 +145,6 @@ describe('AuthClient enableProactiveRefresh toggle', () => {
     const client = makeClient(true);
     client.initializeRefreshSchedule(token);
 
-    // Flip the config off mid-flight and re-arm scheduling via the same
-    // public entry point a real caller would use after a config change.
     (client as any).config.enableProactiveRefresh = false;
     client.initializeRefreshSchedule(token);
 

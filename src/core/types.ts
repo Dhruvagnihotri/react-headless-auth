@@ -209,17 +209,29 @@ export interface AuthConfig {
   // Proactively re-schedules a token refresh ~5min before every access
   // token's expiry, forever, independent of any real request ever being
   // made - keeps a tab silently authenticated even if nobody does
-  // anything in it. Defaults true for backward compatibility (existing
-  // consumers may rely on tokens always being fresh without wrapping
-  // their own fetches in createAuthFetch/useAuthFetch's reactive
-  // refresh-on-401 retry). Set false if your app's authenticated calls
-  // all go through that wrapper already (confirm this first - a gap would
-  // mean an expired token just fails, with nothing to retry it) and you
-  // want token refreshes to only happen in response to real use - e.g. to
-  // make a server-side inactivity timeout (AUTHSVC_SESSION_INACTIVITY_TIMEOUT
-  // in flask-headless-auth) measure genuine inactivity instead of "is the
-  // tab merely open," which this proactive loop defeats by refreshing an
-  // untouched session every ~10 minutes regardless of real activity.
+  // anything in it. The actual interval tracks your token's own lifetime
+  // (lifetime - 5min lead) - e.g. ~10min for a 15min access token, ~55min
+  // for a 60min one, not a fixed number regardless of config.
+  //
+  // Defaults true for backward compatibility (an existing consumer may
+  // rely on tokens always being fresh without wrapping every call site in
+  // a retry helper). Set false ONLY after confirming every authenticated
+  // call in your app goes through one of: createAuthFetch/useAuthFetch,
+  // or this library's own built-in retry (request(), used internally by
+  // login/signup/getUser/updateUser/checkAuth/etc.). A raw fetch/axios/SWR
+  // fetcher, an EventSource/WebSocket, or a cookie-authed
+  // <img>/<a download> that bypasses all of those has no retry path at
+  // all and will simply fail once the access token expires - this flag
+  // doesn't add retry anywhere, it only stops the proactive loop that was
+  // previously masking the need for one.
+  //
+  // Why you'd want this off: with it on, EVERY refresh - proactive or
+  // reactive - looks identical server-side, so a server-side inactivity
+  // timeout (e.g. AUTHSVC_SESSION_INACTIVITY_TIMEOUT in
+  // flask-headless-auth, measured from the last real refresh call) can
+  // never see genuine inactivity - an open, untouched tab refreshes itself
+  // forever. Confirmed in production: sessions stayed "active" 24+ hours
+  // past their configured 8-hour cutoff purely from this loop.
   enableProactiveRefresh?: boolean;
 
   // OAuth

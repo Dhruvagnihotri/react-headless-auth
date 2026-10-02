@@ -409,6 +409,19 @@ const {
     apiPrefix: '/api/auth',                    // API path prefix
     storageStrategy: 'cookie-first',           // 'cookie-first' | 'localStorage-only'
     tokenRefreshInterval: 55 * 60 * 1000,      // 55 minutes
+    enableProactiveRefresh: true,              // default true. Set false ONLY if every
+                                                // authenticated call already goes through
+                                                // createAuthFetch/useAuthFetch or this
+                                                // library's own built-in retry (login,
+                                                // signup, getUser, etc.) - a raw fetch,
+                                                // EventSource/WebSocket, or cookie-authed
+                                                // <img> has no retry path and will just
+                                                // fail once the access token expires.
+                                                // Useful when a server-side inactivity
+                                                // timeout needs real inactivity, not "is
+                                                // the tab merely open" (the proactive loop
+                                                // refreshes - and so resets that clock -
+                                                // on an untouched tab too).
     
     // OAuth
     enableGoogle: true,
